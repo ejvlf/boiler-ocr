@@ -1,4 +1,5 @@
 from datetime import datetime
+
 class BoilerData:
     def __init__(self, raw_data, logger, is_dry_run):
         self.log = logger
