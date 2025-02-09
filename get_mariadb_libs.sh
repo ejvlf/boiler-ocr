@@ -1,0 +1,1 @@
+apt install libmariadb3 libmariadb-dev
