@@ -5,7 +5,17 @@ import pytesseract
 import logging
 from datetime import datetime
 import time
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 
+from objects.boiler import BoilerData
+
+def form_database_connection(user : str, pwd : str, host : str, db : str):
+    database_url = f"mysql+pymysql://{user}:{pwd}@{host}/{db}"
+    engine = create_engine(database_url)
+    SessionLocal = sessionmaker(bind=engine)
+
+    return SessionLocal
 def process_image(image):
     gray_frame = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     ret, image_to_test = cv2.threshold(gray_frame, 150, 255, cv2.THRESH_BINARY)
@@ -77,11 +87,13 @@ def main():
         
         # Parse the detected text (this is a basic example)
         main_logger.debug(f"Detected Text: {detected_text}")
-        result = BoilerData(detected_text, main_logger, args.dry_run)
-        result.persist_run()
+        with form_database_connection() as session:
+            new_record = record_crud.create(session, column_name="value")  # Replace with actual column names
+            fetched_record = record_crud.read(session, obj_id=1)
+
+            result = BoilerData(detected_text, main_logger, args.dry_run)
+            result.persist_run()
         
-        if cv2.waitKey(10) == 27:
-            feed_live = False
         time.sleep(wait_time)
         # Release resources
     capture.release()
