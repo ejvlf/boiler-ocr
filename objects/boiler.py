@@ -55,3 +55,10 @@ class BoilerData:
         if self.dry_run:
             burning = "No" if self.is_burning == False else "Yes"
             self.log.info(f"Current status: Marked time - {self.marked_time}|Temperature - {self.temperature}|Running mode - {self.running_mode}|Burning - {burning}")
+            return
+            
+        timestamp_inserted = db_handler.insert_user("John Doe", "john@example.com")
+        if timestamp_inserted:
+            print("Inserted user ID:", new_user_id)
+        else:
+            print("Insert failed due to constraint violation or error.")
