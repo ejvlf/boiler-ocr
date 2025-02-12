@@ -9,7 +9,7 @@ import time
 from objects.boiler import BoilerData
 
 def form_database_connection(user : str, pwd : str, host : str, db : str):
-    database_url = f"mysql+pymysql://{user}:{pwd}@{host}/{db}"
+    database_url = f"mariadb+mariadbconnector://{user}:{pwd}@{host}/{db}"
     return database_url
 def process_image(image):
     gray_frame = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -53,7 +53,12 @@ def main():
         logging.basicConfig(level=logging_level, format=f'%(asctime)s %(levelname)s: %(message)s') 
     
     # create source video feed
-    source = form_source_endpoint(app_settings["connection"]["ip"], app_settings["connection"]["port"])
+    source = form_source_endpoint(app_settings["camera"]["connection"]["ip"], app_settings["camera"]["connection"]["port"])
+    database_url = form_database_connection(app_settings["app"]["database"]["user"],
+                                            app_settings["app"]["database"]["password"],
+                                            app_settings["app"]["database"]["host"],
+                                            app_settings["app"]["database"]["database"]
+                                            )
     wait_time = 0 if "wait" not in app_settings["app"] else app_settings["app"]["wait"]
 
     # Capture video from a specified source (default is webcam)
@@ -83,7 +88,7 @@ def main():
         # Parse the detected text (this is a basic example)
         main_logger.debug(f"Detected Text: {detected_text}")
         result = BoilerData(detected_text, main_logger, args.dry_run)
-        result.persist_run()
+        result.persist_run(database_url)
         
         time.sleep(wait_time)
         # Release resources

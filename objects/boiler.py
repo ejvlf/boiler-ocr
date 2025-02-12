@@ -1,4 +1,5 @@
 from datetime import datetime
+from persistence.database import MariaDBHandler
 
 class BoilerData:
     def __init__(self, raw_data, logger, is_dry_run):
@@ -51,14 +52,21 @@ class BoilerData:
             temperature_to_return = int(temperature_as_string[1])
         return temperature_to_return
         
-    def persist_run(self):
+    def persist_run(self, db_url = ""):
+        db_handler = None
+        if self.dry_run is False and db_url == "":
+            self.log.warning("Couldn't generate db string. Consider changing to dry run")
+            self.dry_run = True
+        
         if self.dry_run:
             burning = "No" if self.is_burning == False else "Yes"
             self.log.info(f"Current status: Marked time - {self.marked_time}|Temperature - {self.temperature}|Running mode - {self.running_mode}|Burning - {burning}")
             return
+                
+        db_handler = MariaDBHandler(db_url, self.log)
             
-        timestamp_inserted = db_handler.insert_user("John Doe", "john@example.com")
+        timestamp_inserted = db_handler.insert_record(self)
         if timestamp_inserted:
-            print("Inserted user ID:", new_user_id)
+            self.log.info(f"Inserted timestamp: {timestamp_inserted}")
         else:
-            print("Insert failed due to constraint violation or error.")
+            self.log.error(f"Insert failed due to constraint violation or error.")

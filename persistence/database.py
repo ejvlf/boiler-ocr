@@ -1,7 +1,8 @@
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, SmallInteger , String, Boolean, insert
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, SmallInteger , String, Boolean, insert, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import logging
+from datetime import datetime
 
 class MariaDBHandler:
     def __init__(self, db_url: str, log : logging.Logger):
@@ -17,46 +18,40 @@ class MariaDBHandler:
             Column("IsBurning", Boolean, nullable=False)
         )
 
-    def generate_insert_query(self, pk : int, temp : int, stamped_time : str, mode : str, is_burning) -> str:
+    def _generate_insert_query(self, pk : int, temp : int, stamped_time : datetime, mode : str, is_burning) -> str:
         stmt = insert(self.records).values(SystemTimestamp=pk,
                                         Temperature=temp,
-                                        MarkedTime=stamped_time,
+                                        MarkedTime=stamped_time.strftime("%Y-%m-%dT%H:%MZ"),
                                         RunningMode=mode,
                                         IsBurning=is_burning)
-        return stmt.compile(self.engine, compile_kwargs={"literal_binds": True}).string
+        return stmt.compile(self.engine, compile_kwargs={"literal_binds": True})
 
-    def insert_user(self, name: str, email: str):
-        """Insert a user into the database with error handling."""
-        query_str = self.generate_insert_query(name, email)
-        self.log.debug("Generated SQL:", query_str)
+    def insert_record(self, record_object):
+        pk = int(datetime.now().timestamp())
+        query_str = self._generate_insert_query(pk, 
+                                            record_object.temperature,
+                                            record_object.marked_time,
+                                            record_object.running_mode,
+                                            record_object.is_burning
+                                            )
+        self.log.debug("Generated SQL:", query_str.string)
 
         try:
             with self.engine.connect() as conn:
                 result = conn.execute(query_str)
                 conn.commit()
-                return result.inserted_primary_key
+                
+                if result.inserted_primary_key[0] is None:
+                    return pk
+
+                return result.inserted_primary_key[0]
         except IntegrityError as e:
-            self.log.warning(f"IntegrityError: {e.orig}")  # Likely a NULL or unique constraint violation
+            self.log.error(f"IntegrityError: {e.orig}")  # Likely a NULL violation
             return None
         except SQLAlchemyError as e:
-            self.log.critical(f"Database Error: {e}")  # General SQLAlchemy error
+            self.log.critical(f"Command Error: {e}")  # General SQLAlchemy error
             return None
         except Exception as e:
             self.log.critical(f"Unexpected Error: {e}")  # Catch-all for unexpected errors
             return None
 
-# Example Usage:
-if __name__ == "__main__":
-    db_url = "mysql+pymysql://username:password@host:3306/database"
-    db_handler = MariaDBHandler(db_url)
-
-    # Generate SQL query without executing
-    sql_query = db_handler.generate_insert_query("John Doe", "john@example.com")
-    print("Generated SQL Query:", sql_query)
-
-    # Insert user into the database
-    new_user_id = db_handler.insert_user("John Doe", "john@example.com")
-    if new_user_id:
-        print("Inserted user ID:", new_user_id)
-    else:
-        print("Insert failed due to constraint violation or error.")

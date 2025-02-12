@@ -1,3 +1,4 @@
 *.code-workspace
 *.json
 env-*
+__pycache__
