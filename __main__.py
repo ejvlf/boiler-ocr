@@ -24,7 +24,6 @@ def get_settings(file_name : str) -> dict:
         settings = json.load(file)
     return settings
 def extract_text(frame):
-    #cv2.imshow("Debug window", image_to_test)
     # Use pytesseract to do OCR on the processed frame
     image_to_parse = process_image(frame) 
     text = pytesseract.image_to_string(image_to_parse, lang='lets', config="--oem 3 --psm 6 -c tessedit_char_whitelist=A1234567890")
@@ -62,40 +61,44 @@ def main():
     wait_time = 0 if "wait" not in app_settings["app"] else app_settings["app"]["wait"]
 
     # Capture video from a specified source (default is webcam)
-    try:
-        capture = cv2.VideoCapture(source)
-    
-        main_logger.info("Starting video capture")
-
-        if not capture.isOpened():
-            main_logger.critical("Couldn't open video feed")
-            return
-        
-    except Exception:
-        main_logger.critical(f"Couldn't read video feed")
-        return
     
     feed_live = True
     main_logger.info("Video feed started. Analyzing frames.")
     while feed_live:
+        try:
+            capture = cv2.VideoCapture(source)
+        
+            main_logger.info("Starting video capture")
+
+            if not capture.isOpened():
+                main_logger.critical("Couldn't open video feed")
+                return
+            
+        except Exception:
+            main_logger.critical(f"Couldn't read video feed")
+            return        
         ret, frame = capture.read()
         if not ret:
             main_logger.critical("Couldn't read frame.")
             break
+        
         # Extract text from the current frame
+        #cv2.namedWindow("Debug window", cv2.WINDOW_NORMAL)
+        #cv2.imshow("Debug window", frame)
         detected_text = extract_text(frame)
         
         # Parse the detected text (this is a basic example)
         main_logger.debug(f"Detected Text: {detected_text}")
         result = BoilerData(detected_text, main_logger, args.dry_run)
         result.persist_run(database_url)
-        
-        time.sleep(wait_time)
-        # Release resources
-    capture.release()
-    main_logger.debug("Released capture")
-    cv2.destroyAllWindows()
-    main_logger.debug("All video windows destroyed")
-    main_logger.info("Finished capture.")
+        capture.release()
+        main_logger.debug("Released capture")
+
+        try:
+            time.sleep(wait_time)
+        except KeyboardInterrupt:
+            cv2.destroyAllWindows()
+            main_logger.debug("All video windows destroyed")
+            main_logger.info("Finished capture.")
 if __name__ == "__main__":
     main()
