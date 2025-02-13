@@ -8,12 +8,15 @@ import time
 
 from objects.boiler import BoilerData
 
+CAMERA_CONNECTION_ATTEMPTS_LIMIT = 3
+
 def form_database_connection(user : str, pwd : str, host : str, db : str):
     database_url = f"mariadb+mariadbconnector://{user}:{pwd}@{host}/{db}"
     return database_url
 def process_image(image):
     gray_frame = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    ret, image_to_test = cv2.threshold(gray_frame, 150, 255, cv2.THRESH_BINARY)
+    blur = cv2.GaussianBlur(gray_frame,(13,13),0)    
+    ret, image_to_test = cv2.threshold(blur, 150, 255, cv2.THRESH_BINARY)
     return image_to_test
 def form_source_endpoint(ip : str, port : str) -> str:
     endpoint = f"rtsp://{ip}:{port}/h264.sdp"
@@ -64,19 +67,23 @@ def main():
     
     feed_live = True
     main_logger.info("Video feed started. Analyzing frames.")
-    while feed_live:
-        try:
-            capture = cv2.VideoCapture(source)
+    connection_attempts = 0
+    while feed_live:            
         
-            main_logger.info("Starting video capture")
+        capture = cv2.VideoCapture(source)
+        
+        main_logger.info("Starting video capture")
 
-            if not capture.isOpened():
-                main_logger.critical("Couldn't open video feed")
+        if not capture.isOpened():
+            connection_attempts += 1
+            if connection_attempts >= CAMERA_CONNECTION_ATTEMPTS_LIMIT:
+                main_logger.critical("Couldn't open video feed. Giving up.")
                 return
-            
-        except Exception:
-            main_logger.critical(f"Couldn't read video feed")
-            return        
+                
+            main_logger.warning("Couldn't open video feed. Retrying: {connection_attempts}")
+            time.sleep(5)
+            continue
+
         ret, frame = capture.read()
         if not ret:
             main_logger.critical("Couldn't read frame.")
@@ -89,16 +96,23 @@ def main():
         
         # Parse the detected text (this is a basic example)
         main_logger.debug(f"Detected Text: {detected_text}")
-        result = BoilerData(detected_text, main_logger, args.dry_run)
+        result = None
+        try:
+            result = BoilerData(detected_text, main_logger, args.dry_run)
+        except Exception as e:
+            main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
         result.persist_run(database_url)
+        
         capture.release()
-        main_logger.debug("Released capture")
+        main_logger.info("Released capture. Wating for next cycle")
 
         try:
             time.sleep(wait_time)
+
         except KeyboardInterrupt:
             cv2.destroyAllWindows()
             main_logger.debug("All video windows destroyed")
             main_logger.info("Finished capture.")
+            return
 if __name__ == "__main__":
     main()
