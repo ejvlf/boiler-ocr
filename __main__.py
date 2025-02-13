@@ -76,18 +76,18 @@ def main():
 
         if not capture.isOpened():
             connection_attempts += 1
-            if connection_attempts >= CAMERA_CONNECTION_ATTEMPTS_LIMIT:
+            if connection_attempts > CAMERA_CONNECTION_ATTEMPTS_LIMIT:
                 main_logger.critical("Couldn't open video feed. Giving up.")
                 return
                 
-            main_logger.warning("Couldn't open video feed. Retrying: {connection_attempts}")
+            main_logger.warning(f"Couldn't open video feed. Retrying: {connection_attempts}")
             time.sleep(5)
             continue
 
         ret, frame = capture.read()
         if not ret:
             main_logger.critical("Couldn't read frame.")
-            break
+            return
         
         # Extract text from the current frame
         #cv2.namedWindow("Debug window", cv2.WINDOW_NORMAL)
@@ -99,9 +99,9 @@ def main():
         result = None
         try:
             result = BoilerData(detected_text, main_logger, args.dry_run)
+            result.persist_run(database_url)
         except Exception as e:
             main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
-        result.persist_run(database_url)
         
         capture.release()
         main_logger.info("Released capture. Wating for next cycle")
