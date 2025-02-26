@@ -43,13 +43,16 @@ class BoilerData:
             running_mode = mode_from_string[0:mode_from_string.find(" ")].strip()
         return running_mode
     def _form_temperature(self, raw_data):
-        temperature_to_return = 0
-        temperature_as_string = raw_data.splitlines()
-        if self.is_burning:
-            empty_space_idx = temperature_as_string[1].find(" ")
-            temperature_to_return = int(temperature_as_string[1][empty_space_idx:].strip())
-        else:
-            temperature_to_return = int(temperature_as_string[1])
+        try:
+            temperature_to_return = 0
+            temperature_as_string = raw_data.splitlines()
+            if self.is_burning:
+                empty_space_idx = temperature_as_string[1].find(" ")
+                temperature_to_return = int(temperature_as_string[1][empty_space_idx:].strip())
+            else:
+                temperature_to_return = int(temperature_as_string[1])
+        except ValueError as e:
+            self.log.error(f"Couldn't get proper temperature from ocr {raw_data}. Setting to 0.")
         return temperature_to_return
         
     def persist_run(self, db_url = ""):
