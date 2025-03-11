@@ -46,7 +46,7 @@ class MariaDBHandler:
                 
                 return result.inserted_primary_key[0]
         except IntegrityError as e:
-            self.log.error(f"IntegrityError: {e.orig}")  # Likely a NULL violation
+            self.log.error(f"Integrity Error: {e.orig}")  # Likely a NULL violation
             return None
         except SQLAlchemyError as e:
             self.log.critical(f"Command Error: {e}")  # General SQLAlchemy error

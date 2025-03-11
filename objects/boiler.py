@@ -1,14 +1,14 @@
 from datetime import datetime
-from persistence.database import MariaDBHandler
 
 class BoilerData:
-    def __init__(self, raw_data, logger, is_dry_run):
+    def __init__(self, raw_data, logger, is_dry_run, db_handler):
         self.log = logger
         self.is_burning = self._form_is_burning(raw_data)
         self.temperature = self._form_temperature(raw_data)
         self.marked_time = self._form_marked_time(raw_data)
         self.running_mode = self._form_running_mode(raw_data)
         self.dry_run = is_dry_run
+        self.db_handler = db_handler
     def _form_is_burning(self, raw_data):
         is_burning = False            
         if len(raw_data) > 7:
@@ -55,20 +55,18 @@ class BoilerData:
             self.log.error(f"Couldn't get proper temperature from ocr {raw_data}. Setting to 0.")
         return temperature_to_return
         
-    def persist_run(self, db_url = ""):
-        db_handler = None
-        if self.dry_run is False and db_url == "":
-            self.log.warning("Couldn't generate db string. Consider changing to dry run")
+    def persist_run(self):
+
+        if self.dry_run is False and self.db_handler is None:
+            self.log.error("Couldn't generate db string. Consider changing to dry run")
             self.dry_run = True
         
         if self.dry_run:
             burning = "No" if self.is_burning == False else "Yes"
             self.log.info(f"Current status: Marked time - {self.marked_time}|Temperature - {self.temperature}|Running mode - {self.running_mode}|Burning - {burning}")
             return
-                
-        db_handler = MariaDBHandler(db_url, self.log)
-            
-        timestamp_inserted = db_handler.insert_record(self)
+
+        timestamp_inserted = self.db_handler.insert_record(self)
         if timestamp_inserted:
             self.log.info(f"Inserted timestamp: {timestamp_inserted}")
         else:

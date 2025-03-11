@@ -7,6 +7,7 @@ from datetime import datetime
 import time
 
 from objects.boiler import BoilerData
+from persistence.database import MariaDBHandler
 
 CAMERA_CONNECTION_ATTEMPTS_LIMIT = 3
 
@@ -64,10 +65,14 @@ def main():
     wait_time = 0 if "wait" not in app_settings["app"] else app_settings["app"]["wait"]
 
     # Capture video from a specified source (default is webcam)
-    
     feed_live = True
     main_logger.info("Video feed started. Analyzing frames.")
     connection_attempts = 0
+
+    db_handler = None
+    if args.dry_run:
+        db_handler = MariaDBHandler(database_url, main_logger)
+
     while feed_live:            
         
         capture = cv2.VideoCapture(source)
@@ -98,8 +103,8 @@ def main():
         main_logger.debug(f"Detected Text: {detected_text}")
         result = None
         try:
-            result = BoilerData(detected_text, main_logger, args.dry_run)
-            result.persist_run(database_url)
+            result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
+            result.persist_run()
         except Exception as e:
             main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
         
