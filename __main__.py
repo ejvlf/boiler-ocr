@@ -71,11 +71,11 @@ def main():
     boiler_is_disabled = 0
 
     db_handler = None
-    if args.dry_run:
+    if args.dry_run == False:
         db_handler = MariaDBHandler(database_url, main_logger)
 
     while feed_live:            
-        
+        main_logger.debug(f"Trying to connect to {source}")
         capture = cv2.VideoCapture(source)
         
         main_logger.info("Starting video capture")
