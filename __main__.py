@@ -68,6 +68,7 @@ def main():
     feed_live = True
     main_logger.info("Video feed started. Analyzing frames.")
     connection_attempts = 0
+    boiler_is_disabled = 0
 
     db_handler = None
     if args.dry_run:
@@ -104,7 +105,13 @@ def main():
         result = None
         try:
             result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
-            result.persist_run()
+            if result.is_burning == True:
+                result.persist_run()
+            elif result.is_burning == False and boiler_is_disabled == 0:
+                boiler_is_disabled += 1
+                main_logger.info("Boiler is marked as disabled. Next run won't persist.")
+                result.persist_run()
+                
         except Exception as e:
             main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
         
