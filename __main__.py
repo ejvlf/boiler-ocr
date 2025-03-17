@@ -16,13 +16,13 @@ def form_database_connection(user : str, pwd : str, host : str, db : str):
     return database_url
 def process_image(image, is_debug):
     gray_frame = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    #blur = cv2.GaussianBlur(gray_frame,(13,13),0)    
-    #ret, image_to_test = cv2.threshold(blur, 150, 255, cv2.THRESH_BINARY)
-    if is_debug == False:
+    blur = cv2.GaussianBlur(gray_frame,(13,13),0)    
+    ret, image_to_test = cv2.threshold(blur, 150, 255, cv2.THRESH_BINARY)
+    if is_debug == True:
         cv2.namedWindow("Debug window", cv2.WINDOW_NORMAL)
-        cv2.imshow("Debug window", gray_frame)
+        cv2.imshow("Debug window", image_to_test)
         cv2.waitKey(0)
-    return gray_frame
+    return image_to_test
 def form_source_endpoint(ip : str, port : str) -> str:
     endpoint = f"rtsp://{ip}:{port}/h264.sdp"
     return endpoint
@@ -33,7 +33,7 @@ def get_settings(file_name : str) -> dict:
     return settings
 def extract_text(frame):
     # Use pytesseract to do OCR on the processed frame
-    image_to_parse = process_image(frame) 
+    image_to_parse = process_image(frame,False) 
     text = pytesseract.image_to_string(image_to_parse, lang='lets', config="--oem 3 --psm 6 -c tessedit_char_whitelist=A1234567890")
     return text.strip()
 def main():    
@@ -77,57 +77,69 @@ def main():
     db_handler = None
     if args.dry_run == False:
         db_handler = MariaDBHandler(database_url, main_logger)
+    
+    main_logger.debug(f"Trying to connect to {source}")
+    capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+    capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    main_logger.info("Starting video capture")    
+    
+    try:
+        while feed_live:
+            start_time = time.time()
 
-    while feed_live:            
-        main_logger.debug(f"Trying to connect to {source}")
-        capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
-        
-        main_logger.info("Starting video capture")
+            main_logger.info("Reading frame")
+            if not capture.isOpened():
+                capture.release()
+                connection_attempts += 1
+                if connection_attempts > CAMERA_CONNECTION_ATTEMPTS_LIMIT:
+                    main_logger.critical("Couldn't open video feed. Giving up.")
+                    return                    
 
-        if not capture.isOpened():
-            connection_attempts += 1
-            if connection_attempts > CAMERA_CONNECTION_ATTEMPTS_LIMIT:
-                main_logger.critical("Couldn't open video feed. Giving up.")
+                main_logger.warning(f"Couldn't open video feed. Retrying: {connection_attempts}")
+                time.sleep(5)
+                capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)                
+                continue
+
+            ret, frame = capture.read()
+            if not ret:
+                main_logger.critical("Couldn't read frame.")
                 return
-                
-            main_logger.warning(f"Couldn't open video feed. Retrying: {connection_attempts}")
-            time.sleep(5)
-            continue
+            
+            # Extract text from the current frame
+            detected_text = extract_text(frame)
+            
+            # Parse the detected text (this is a basic example)
+            main_logger.debug(f"Detected Text: {detected_text}")
+            result = None
+            try:
+                result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
+                if result.is_burning == True:
+                    boiler_is_disabled = 0
+                    
+                    end_time = time.time()
+                    elapsed_time = end_time - start_time
 
-        ret, frame = capture.read()
-        if not ret:
-            main_logger.critical("Couldn't read frame.")
-            return
-        
-        # Extract text from the current frame
-        detected_text = extract_text(frame)
-        
-        # Parse the detected text (this is a basic example)
-        main_logger.debug(f"Detected Text: {detected_text}")
-        result = None
-        try:
-            result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
-            if result.is_burning == True:
-                boiler_is_disabled = 0
-                result.persist_run()
-            elif result.is_burning == False and boiler_is_disabled == 0:
-                boiler_is_disabled += 1
-                main_logger.info("Boiler is marked as disabled. Next run won't persist.")
-                result.persist_run()
-                
-        except Exception as e:
-            main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
-        
+                    if elapsed_time >= wait_time:
+                        result.persist_run()
+                        start_time = time.time()
+                elif result.is_burning == False and boiler_is_disabled == 0:
+                    boiler_is_disabled += 1
+                    main_logger.info("Boiler is marked as disabled. Next run won't persist.")
+                    result.persist_run()
+                    
+            except Exception as e:
+                main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
+            
+            main_logger.info("Next frame")
+            time.sleep(1)
+
+    except KeyboardInterrupt:
         capture.release()
         cv2.destroyAllWindows()
-        main_logger.info("Released capture. Wating for next cycle")
 
-        try:
-            time.sleep(wait_time)
-
-        except KeyboardInterrupt:
-            main_logger.debug("All video windows destroyed")
-            main_logger.info("Finished capture.")
-            return
+        main_logger.debug("All video windows destroyed")
+        main_logger.info("Finished capture.")
+        return
 if __name__ == "__main__":
     main()

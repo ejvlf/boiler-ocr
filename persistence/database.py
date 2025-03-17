@@ -8,6 +8,9 @@ class MariaDBHandler:
     def __init__(self, db_url: str, log : logging.Logger):
         self.log = log
         self.engine = create_engine(db_url)
+        self.log.info("Connecting to database...")
+        self.connection = self.engine.connect()
+        test = self.connection.info
         self.metadata = MetaData()
         self.records = Table(
             "records", self.metadata,
@@ -37,14 +40,14 @@ class MariaDBHandler:
         self.log.debug("Generated SQL:", query_str.string)
 
         try:
-            with self.engine.connect() as conn:
-                result = conn.execute(query_str)
-                conn.commit()
+            
+            result = self.connection.execute(query_str)
+            self.connection.commit()
                 
-                if result.inserted_primary_key[0] is None:
-                    return pk
+            if result.inserted_primary_key[0] is None:
+                return pk
                 
-                return result.inserted_primary_key[0]
+            return result.inserted_primary_key[0]
         except IntegrityError as e:
             self.log.error(f"Integrity Error: {e.orig}")  # Likely a NULL violation
             return None
@@ -54,3 +57,6 @@ class MariaDBHandler:
         except Exception as e:
             self.log.critical(f"Unexpected Error: {e}")  # Catch-all for unexpected errors
             return None
+    def __del__(self):
+        self.connection.close()
+        self.log.info("DB Connection closed")
