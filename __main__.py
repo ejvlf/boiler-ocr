@@ -17,7 +17,8 @@ def form_database_connection(user : str, pwd : str, host : str, db : str):
 def process_image(image, is_debug):
     gray_frame = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray_frame,(13,13),0)    
-    ret, image_to_test = cv2.threshold(blur, 150, 255, cv2.THRESH_BINARY)
+    image_to_test = blur 
+    #cv2.threshold(gray_frame, 150, 255, cv2.THRESH_BINARY)
     if is_debug == True:
         cv2.namedWindow("Debug window", cv2.WINDOW_NORMAL)
         cv2.imshow("Debug window", image_to_test)
@@ -31,9 +32,9 @@ def get_settings(file_name : str) -> dict:
     with open(file_name, 'r') as file:
         settings = json.load(file)
     return settings
-def extract_text(frame):
+def extract_text(frame, is_debug):
     # Use pytesseract to do OCR on the processed frame
-    image_to_parse = process_image(frame,False) 
+    image_to_parse = process_image(frame, is_debug) 
     text = pytesseract.image_to_string(image_to_parse, lang='lets', config="--oem 3 --psm 6 -c tessedit_char_whitelist=A1234567890")
     return text.strip()
 def main():    
@@ -80,14 +81,14 @@ def main():
     
     main_logger.debug(f"Trying to connect to {source}")
     capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
-    capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    capture.set(cv2.CAP_PROP_BUFFERSIZE, 3)
     main_logger.info("Starting video capture")    
+    start_time = time.time()
     
     try:
         while feed_live:
-            start_time = time.time()
-
-            main_logger.info("Reading frame")
+            
+            main_logger.debug("Reading frame")
             if not capture.isOpened():
                 capture.release()
                 connection_attempts += 1
@@ -107,7 +108,7 @@ def main():
                 return
             
             # Extract text from the current frame
-            detected_text = extract_text(frame)
+            detected_text = extract_text(frame, args.debug)
             
             # Parse the detected text (this is a basic example)
             main_logger.debug(f"Detected Text: {detected_text}")
@@ -123,6 +124,7 @@ def main():
                     if elapsed_time >= wait_time:
                         result.persist_run()
                         start_time = time.time()
+                
                 elif result.is_burning == False and boiler_is_disabled == 0:
                     boiler_is_disabled += 1
                     main_logger.info("Boiler is marked as disabled. Next run won't persist.")
@@ -131,7 +133,7 @@ def main():
             except Exception as e:
                 main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
             
-            main_logger.info("Next frame")
+            main_logger.debug("Next frame")
             time.sleep(1)
 
     except KeyboardInterrupt:
