@@ -22,9 +22,8 @@ def process_image(image, is_debug):
     image_to_test = blur 
     #cv2.threshold(gray_frame, 150, 255, cv2.THRESH_BINARY)
     if is_debug == True:
-        cv2.namedWindow("Debug window", cv2.WINDOW_NORMAL)
-        cv2.imshow("Debug window", image_to_test)
-        cv2.waitKey(0)
+        cv2.imshow("RTSP Stream", image_to_test)
+        cv2.waitKey(1)
     return image_to_test
 def form_source_endpoint(ip : str, port : str) -> str:
     endpoint = f"rtsp://{ip}:{port}/h264.sdp"
