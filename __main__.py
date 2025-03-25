@@ -1,5 +1,6 @@
 import json
 import cv2
+import av
 import argparse
 import pytesseract
 import logging
@@ -10,6 +11,7 @@ from objects.boiler import BoilerData
 from persistence.database import MariaDBHandler
 
 CAMERA_CONNECTION_ATTEMPTS_LIMIT = 3
+DEFAULT_WAIT_TIME_IN_SECONDS = 1
 
 def form_database_connection(user : str, pwd : str, host : str, db : str):
     database_url = f"mariadb+mariadbconnector://{user}:{pwd}@{host}/{db}"
@@ -67,10 +69,9 @@ def main():
                                             app_settings["app"]["database"]["host"],
                                             app_settings["app"]["database"]["database"]
                                             )
-    wait_time = 0 if "wait" not in app_settings["app"] else app_settings["app"]["wait"]
+    wait_time = DEFAULT_WAIT_TIME_IN_SECONDS if "wait" not in app_settings["app"] else app_settings["app"]["wait"]
 
     # Capture video from a specified source (default is webcam)
-    feed_live = True
     main_logger.info("Video feed started. Analyzing frames.")
     connection_attempts = 0
     boiler_is_disabled = 0
@@ -80,50 +81,28 @@ def main():
         db_handler = MariaDBHandler(database_url, main_logger)
     
     main_logger.debug(f"Trying to connect to {source}")
-    capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
-    capture.set(cv2.CAP_PROP_BUFFERSIZE, 3)
     main_logger.info("Starting video capture")    
     start_time = time.time()
+    container = av.open(source, format="rtsp", timeout=5)
     
     try:
-        while feed_live:
-            
-            main_logger.debug("Reading frame")
-            if not capture.isOpened():
-                capture.release()
-                connection_attempts += 1
-                if connection_attempts > CAMERA_CONNECTION_ATTEMPTS_LIMIT:
-                    main_logger.critical("Couldn't open video feed. Giving up.")
-                    return                    
-
-                main_logger.warning(f"Couldn't open video feed. Retrying: {connection_attempts}")
-                time.sleep(5)
-                capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
-                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)                
-                continue
-
-            ret, frame = capture.read()
-            if not ret:
-                main_logger.critical("Couldn't read frame.")
-                return
-            
+        for idx, frame in enumerate(container.decode(video=0)):
+            main_logger.debug(f"Frame {idx}: {frame.width}x{frame.height} at {frame.time}s")
+            if connection_attempts > CAMERA_CONNECTION_ATTEMPTS_LIMIT:
+                main_logger.critical("Couldn't open video feed. Giving up.")
+                return            
             # Extract text from the current frame
-            detected_text = extract_text(frame, args.debug)
+            detected_text = extract_text(frame.to_ndarray(format="bgr24"), args.debug)
             
             # Parse the detected text (this is a basic example)
             main_logger.debug(f"Detected Text: {detected_text}")
             result = None
-            try:
+            
+            try:    
                 result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
                 if result.is_burning == True:
                     boiler_is_disabled = 0
-                    
-                    end_time = time.time()
-                    elapsed_time = end_time - start_time
-
-                    if elapsed_time >= wait_time:
-                        result.persist_run()
-                        start_time = time.time()
+                    result.persist_run()
                 
                 elif result.is_burning == False and boiler_is_disabled == 0:
                     boiler_is_disabled += 1
@@ -133,11 +112,11 @@ def main():
             except Exception as e:
                 main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
             
+            time.sleep(wait_time)
             main_logger.debug("Next frame")
-            time.sleep(1)
 
     except KeyboardInterrupt:
-        capture.release()
+        container.close()
         cv2.destroyAllWindows()
 
         main_logger.debug("All video windows destroyed")
