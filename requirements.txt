@@ -2,4 +2,3 @@ opencv-python==4.11.0.86
 pytesseract==0.3.13
 SQLAlchemy==2.0.38
 mariadb==1.1.11
-pyav==14.2.0
