@@ -75,15 +75,13 @@ def main():
     feed_live = True
     main_logger.info("Video feed started. Analyzing frames.")
     connection_attempts = 0
-    boiler_is_disabled = 0
 
     db_handler = None
     if args.dry_run == False:
         db_handler = MariaDBHandler(database_url, main_logger)
     
     main_logger.debug(f"Trying to connect to {source}")
-    main_logger.info("Starting video capture")
-    
+
     try:
         while feed_live:
             capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
@@ -114,14 +112,10 @@ def main():
             main_logger.debug(f"Detected Text: {detected_text}")
             result = None
             try:
+                
                 result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
-                if result.is_burning == True and len(result.temperature) > 1:
-                    boiler_is_disabled = 0
-                    result.persist_run()                        
-    
-                elif result.is_burning == False and boiler_is_disabled == 0:
-                    boiler_is_disabled += 1
-                    main_logger.info("Boiler is marked as disabled. Next run won't persist.")
+                
+                if result.temperature < 10:
                     result.persist_run()
                     
             except Exception as e:
