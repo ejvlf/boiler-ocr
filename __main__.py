@@ -10,21 +10,18 @@ from objects.boiler import BoilerData
 from persistence.database import MariaDBHandler
 
 CAMERA_CONNECTION_ATTEMPTS_LIMIT = 3
+TEMPERATURE_THRESHOLD = 10
 
 def form_database_connection(user : str, pwd : str, host : str, db : str):
     database_url = f"mariadb+mariadbconnector://{user}:{pwd}@{host}/{db}"
     return database_url
 def process_image(image, is_debug):
-    gray_frame = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray_frame,(13,13),0)    
-    image_to_test = blur 
-    """
-    cv2.threshold(gray_frame, 150, 255, cv2.THRESH_BINARY)
+    gray_frame = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    ret, image_to_test = cv2.threshold(gray_frame, 200, 255, cv2.THRESH_BINARY_INV)    
     if is_debug == True:
-        cv2.namedWindow("Debug window", cv2.WINDOW_NORMAL)
         cv2.imshow("Debug window", image_to_test)
         cv2.waitKey(0)
-    """
+
     return image_to_test
 def form_source_endpoint(ip : str, port : str) -> str:
     endpoint = f"rtsp://{ip}:{port}/h264.sdp"
@@ -115,7 +112,7 @@ def main():
                 
                 result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
                 
-                if result.temperature < 10:
+                if result.temperature > TEMPERATURE_THRESHOLD:
                     result.persist_run()
                     
             except Exception as e:
