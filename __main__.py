@@ -119,6 +119,7 @@ def main():
                 main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
             
             capture.release()
+            cv2.destroyAllWindows()
             main_logger.debug("Resources released. Waiting")
             time.sleep(wait_time)
 
