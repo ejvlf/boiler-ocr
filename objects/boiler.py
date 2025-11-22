@@ -10,8 +10,9 @@ class BoilerData:
         self.dry_run = is_dry_run
         self.db_handler = db_handler
     def _form_is_burning(self, raw_data):
-        is_burning = False            
-        if len(raw_data) > 7:
+        is_burning = False
+        bottom_row = raw_data.splitlines()[1].strip()            
+        if len(bottom_row) > 2:
             is_burning = True
         return is_burning
     def _form_marked_time (self, raw_data):
@@ -41,6 +42,10 @@ class BoilerData:
         if self.is_burning:
             mode_from_string = raw_data.splitlines()[1]
             running_mode = mode_from_string[0:1].strip()
+
+            # Tesseract thinks A is 8
+            if running_mode == "8":
+                running_mode = "A"
         return running_mode
     def _form_temperature(self, raw_data):
         try:

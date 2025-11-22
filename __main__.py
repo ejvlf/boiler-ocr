@@ -17,7 +17,7 @@ def form_database_connection(user : str, pwd : str, host : str, db : str):
     return database_url
 def process_image(image, is_debug):
     gray_frame = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    ret, image_to_test = cv2.threshold(gray_frame, 200, 255, cv2.THRESH_BINARY_INV)    
+    ret, image_to_test = cv2.threshold(gray_frame, 240, 255, cv2.THRESH_BINARY_INV)    
     if is_debug == True:
         cv2.imshow("Debug window", image_to_test)
         cv2.waitKey(0)
@@ -34,8 +34,13 @@ def get_settings(file_name : str) -> dict:
 def extract_text(frame, is_debug):
     # Use pytesseract to do OCR on the processed frame
     image_to_parse = process_image(frame, is_debug) 
-    text = pytesseract.image_to_string(image_to_parse, lang='lets', config="--oem 3 --psm 6 -c tessedit_char_whitelist=A1234567890")
+    text = pytesseract.image_to_string(image_to_parse, lang='lets', config="--oem 3 --psm 6 -c tessedit_char_whitelist=aA1234567890")
     return text.strip()
+def cleanup(capture=None):
+    if capture is not None:
+        capture.release()
+    cv2.destroyAllWindows()
+
 def main():    
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", help="add more logging information to application", action="store_true")
@@ -124,10 +129,7 @@ def main():
             time.sleep(wait_time)
 
     except KeyboardInterrupt:
-        capture.release()
-        cv2.destroyAllWindows()
-
-        main_logger.debug("All video windows destroyed")
+        cleanup(capture)
         main_logger.info("Finished capture.")
         return
 if __name__ == "__main__":
