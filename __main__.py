@@ -24,7 +24,7 @@ def process_image(image, is_debug):
 
     return image_to_test
 def form_source_endpoint(ip : str, port : str) -> str:
-    endpoint = f"rtsp://{ip}:{port}/h264.sdp"
+    endpoint = f"http://{ip}:{port}/shot.jpg"
     return endpoint
 def get_settings(file_name : str) -> dict:
     settings = None
