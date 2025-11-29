@@ -3,6 +3,7 @@ import cv2
 import argparse
 import pytesseract
 import logging
+import signal
 from datetime import datetime
 import time
 
@@ -57,7 +58,9 @@ def cleanup(capture=None):
         capture.release()
     cv2.destroyAllWindows()
 
-def main():    
+def main():
+    signal.signal(signal.SIGTERM, cleanup)
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", help="add more logging information to application", action="store_true")
     parser.add_argument("--file_log", help="Log actions to a file", action="store_true")

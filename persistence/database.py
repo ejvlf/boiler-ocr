@@ -10,7 +10,8 @@ class MariaDBHandler:
         self.engine = create_engine(db_url)
         self.log.info("Connecting to database...")
         self.connection = self.engine.connect()
-        test = self.connection.info
+        self.log.info(f"Connected to database {self.engine.url}")
+
         self.metadata = MetaData()
         self.records = Table(
             "records", self.metadata,
