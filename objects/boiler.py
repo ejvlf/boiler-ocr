@@ -52,8 +52,8 @@ class BoilerData:
             temperature_to_return = 0
             temperature_as_string = raw_data.splitlines()
             if self.is_burning:
-                temperature_to_return = int(temperature_as_string[1][-2:].strip())
-            else:
+                temperature_to_return = int(temperature_as_string[1].replace(" ","")[-2:].strip())
+            else:                
                 temperature_to_return = int(temperature_as_string[1].strip())
         except ValueError as e:
             self.log.error(f"Couldn't get proper temperature from ocr {raw_data}. Setting to 0.")

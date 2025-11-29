@@ -25,8 +25,8 @@ def form_database_connection(user : str, pwd : str, host : str, db : str):
     return database_url
 
 def process_image(image, is_debug):
-    gray_frame = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    ret, image_to_test = cv2.threshold(gray_frame, 240, 255, cv2.THRESH_BINARY_INV)    
+    gray_frame = cv2.cvtColor(image, cv2.COLOR_RGBA2GRAY)
+    ret, image_to_test = cv2.threshold(gray_frame, 230, 200, cv2.THRESH_BINARY_INV)    
     if is_debug == True:
         cv2.imshow("Debug window", image_to_test)
         cv2.waitKey(0)
@@ -34,7 +34,7 @@ def process_image(image, is_debug):
     return image_to_test
 
 def form_source_endpoint(ip : str, port : str) -> str:
-    endpoint = f"http://{ip}:{port}/shot.jpg"
+    endpoint = f"rtsp://{ip}:{port}/h264.sdp"
     return endpoint
 
 def get_settings(file_name : str) -> dict:
@@ -47,6 +47,10 @@ def extract_text(frame, is_debug):
     image_to_parse = process_image(frame, is_debug) 
     text = pytesseract.image_to_string(image_to_parse, lang='lets', config="--oem 3 --psm 6 -c tessedit_char_whitelist=aA1234567890")
     return text.strip()
+
+def connect(source):
+    return cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+
 
 def cleanup(capture=None):
     if capture is not None:
@@ -61,14 +65,14 @@ def main():
     parser.add_argument("--settings", help="Name of the file with the settings. Needs to be json.")
 
     args = parser.parse_args()
-    
-    # definições
-    app_settings = get_settings(f"{args.settings}.json")
-    pytesseract.pytesseract.tesseract_cmd = app_settings["ocr"]["tesseract-dir"]
-    
+
     # logger
     logging_level = logging.DEBUG if args.debug == True else logging.INFO
     main_logger = logging.getLogger("Boiler OCR")    
+
+    # definições
+    app_settings = get_settings(f"{args.settings}.json")
+    pytesseract.pytesseract.tesseract_cmd = app_settings["ocr"]["tesseract-dir"]
     
     if args.file_log == True:
         fname = f"{datetime.now().date().strftime('%Y-%m-%d')}_boiler_ocr.log"
@@ -97,7 +101,7 @@ def main():
     try:
         # O smartphone fazia timeout se o objeto estivesse sempre instanciado
         while feed_live:
-            capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+            capture = connect(source)
             main_logger.debug("Reading frame")
 
             if not capture.isOpened():
@@ -109,7 +113,7 @@ def main():
 
                 main_logger.warning(f"Couldn't open video feed. Retrying: {connection_attempts}")
                 time.sleep(5)
-                capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+                capture = connect(source)
                 capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)                
                 continue
             # Lê o frame
@@ -134,7 +138,7 @@ def main():
             except Exception as e:
                 main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
             
-            cleanup(capture)
+            #cleanup(capture)
             main_logger.debug("Resources released. Waiting")
             time.sleep(wait_time)
 
