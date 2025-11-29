@@ -52,6 +52,8 @@ def extract_text(frame, is_debug):
 def connect(source):
     return cv2.VideoCapture(source, cv2.CAP_FFMPEG)
 
+def handle_sigterm():
+    raise KeyboardInterrupt
 
 def cleanup(capture=None):
     if capture is not None:
@@ -59,8 +61,8 @@ def cleanup(capture=None):
     cv2.destroyAllWindows()
 
 def main():
-    signal.signal(signal.SIGTERM, cleanup)
-    
+    signal.signal(signal.SIGTERM, handle_sigterm)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", help="add more logging information to application", action="store_true")
     parser.add_argument("--file_log", help="Log actions to a file", action="store_true")
@@ -147,7 +149,7 @@ def main():
 
     except KeyboardInterrupt:
         cleanup(capture)
-        main_logger.info("Finished capture.")
+        main_logger.info("Finished capture")
         return
 if __name__ == "__main__":
     main()
