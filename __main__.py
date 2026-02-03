@@ -34,8 +34,9 @@ def process_image(image, is_debug):
 
     return image_to_test
 
+# Construir o endpoint para a fotografia
 def form_source_endpoint(ip : str, port : str) -> str:
-    endpoint = f"rtsp://{ip}:{port}/h264.sdp"
+    endpoint = f"http://{ip}:{port}/video"
     return endpoint
 
 def get_settings(file_name : str) -> dict:
