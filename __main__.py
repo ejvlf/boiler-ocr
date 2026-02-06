@@ -7,6 +7,7 @@ import signal
 from datetime import datetime
 import time
 
+from objects.analytics import ReportProcessor
 from objects.boiler import BoilerData
 from persistence.database import MariaDBHandler
 
@@ -61,6 +62,9 @@ def cleanup(capture=None):
         capture.release()
     cv2.destroyAllWindows()
 
+
+
+
 def main():
     signal.signal(signal.SIGTERM, handle_sigterm)
 
@@ -103,8 +107,20 @@ def main():
         db_handler = MariaDBHandler(database_url, main_logger)
     
     main_logger.debug(f"Trying to connect to {source}")
-    
+
+    records = db_handler.get_report_records_after()
+    main_logger.info(f"Records fetched: {len(records)}")
+
+    report_records = ReportProcessor(main_logger, db_handler)
+    records_to_persist = report_records.process_report_data(records)
+
+    for record in records_to_persist:
+        main_logger.info(f"Persisting report record with start time {record.start_time} and end time {record.end_time}")
+        db_handler.insert_report_record(record)
+
     try:
+        
+        is_off = False
         # O smartphone fazia timeout se o objeto estivesse sempre instanciado
         while feed_live:
             capture = connect(source)
@@ -138,9 +154,18 @@ def main():
                 # Instanciar. Validações estão dentro do objeto                
                 result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
                 
-                if result.temperature > TEMPERATURE_THRESHOLD:
+                if result.temperature > TEMPERATURE_THRESHOLD and is_off == False:
                     result.persist_run()
+
+                if result.is_burning == False and is_off == False:
+                    main_logger.info("Boiler is off. Not persisting until turned on.")
+                    is_off = True
                     
+                elif result.is_burning == True and is_off == True:
+                    main_logger.info("Boiler is on again. Resuming persistence.")
+                    is_off = False
+
+
             except Exception as e:
                 main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
             

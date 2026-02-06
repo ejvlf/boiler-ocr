@@ -1,8 +1,10 @@
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, SmallInteger , String, Boolean, insert, text
+from sqlalchemy import DateTime, Numeric, Time, create_engine, MetaData, Table, Column, Integer, SmallInteger , String, Boolean, func, insert, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import logging
 from datetime import datetime
+
+from objects.analytics import ReportData
 
 class MariaDBHandler:
     def __init__(self, db_url: str, log : logging.Logger):
@@ -21,28 +23,100 @@ class MariaDBHandler:
             Column("RunningMode", String(1), nullable=True),
             Column("IsBurning", Boolean, nullable=False)
         )
+        self.report = Table(
+            "report", self.metadata,
+            Column("ID", Integer, primary_key=True),
+            Column("StartTime", DateTime, nullable=False),
+            Column("EndTime", DateTime, nullable=False),
+            Column("AvgTemperature", Numeric(3,1), nullable=False),
+            Column("MaxRoomTemperature", Integer, nullable=False),
+            Column("Mode1", Time, nullable=False),
+            Column("Mode2", Time, nullable=False),
+            Column("Mode3", Time, nullable=False),
+            Column("Mode4", Time, nullable=False),
+            Column("Mode5", Time, nullable=False),
+            Column("ModeA", Time, nullable=False),
+            Column("TotalDuration", Time, nullable=False),
+            Column("HasStandby", Boolean, nullable=False)
+        )
+    def get_reporting_last_end_time(self) -> datetime:
+        try:
+            # Query for the maximum EndTime
+            stmt = select(func.max(self.report.c.EndTime))
 
-    def _generate_insert_query(self, pk : int, temp : int, stamped_time : datetime, mode : str, is_burning) -> str:
-        stmt = insert(self.records).values(SystemTimestamp=pk,
-                                        Temperature=temp,
-                                        MarkedTime=stamped_time.strftime("%Y-%m-%dT%H:%MZ"),
-                                        RunningMode=mode,
-                                        IsBurning=is_burning)
-        return stmt.compile(self.engine, compile_kwargs={"literal_binds": True})
+            result = self.connection.execute(stmt)
+            latest_end_time = result.scalar()
+            
+            # If no records exist, return default date
+            if latest_end_time is None:
+                self.log.info("No records found in report table, returning default date")
+                return datetime(2026, 2, 3, 0, 0, 0)
+
+            return latest_end_time
+            
+        except SQLAlchemyError as e:
+            self.log.error(f"Error fetching latest EndTime: {e}")
+            return datetime(2026, 2, 3)  # Return default on error
+    def get_report_records_after(self):
+        try:
+            timestamp = self.get_reporting_last_end_time()
+            timestamp_int = int(timestamp.timestamp())
+            stmt = select(self.records).where(self.records.c.SystemTimestamp > timestamp_int
+                                              ).order_by(self.records.c.SystemTimestamp.asc())
+
+            result = self.connection.execute(stmt)
+
+            return result.fetchall()
+        except TypeError as e:
+            self.log.error(f"Type error on {timestamp}: {e}")
+            return []
+        except SQLAlchemyError as e:
+            self.log.error(f"Error fetching records after {timestamp}: {e}")
+            return []
+    def insert_report_record(self, report_object : ReportData):
+        stmt = insert(self.report).values(StartTime=report_object.start_time,
+                                        EndTime=report_object.end_time,
+                                        AvgTemperature=report_object.avg_temperature,
+                                        MaxRoomTemperature=report_object.max_room_temperature,
+                                        Mode1=report_object.operation_time["mode1"],
+                                        Mode2=report_object.operation_time["mode2"],
+                                        Mode3=report_object.operation_time["mode3"],
+                                        Mode4=report_object.operation_time["mode4"],
+                                        Mode5=report_object.operation_time["mode5"],
+                                        ModeA=report_object.operation_time["modeA"],
+                                        TotalDuration=report_object.total_duration,
+                                        HasStandby=report_object.has_standby
+                                        )
+        stmt.compile(self.engine, compile_kwargs={"literal_binds": True})
+        try:
+            
+            result = self.connection.execute(stmt)
+            self.connection.commit()
+            self.log.info(f"Inserted report record with ID {result.inserted_primary_key[0]}")
+                
+            return result.inserted_primary_key[0]
+        except IntegrityError as e:
+            self.log.error(f"Integrity Error: {e.orig}")  # Likely a NULL violation
+            return None
+        except SQLAlchemyError as e:
+            self.log.critical(f"Command Error: {e}")  # General SQLAlchemy error
+            return None
+        except Exception as e:
+            self.log.critical(f"Unexpected Error: {e}")  # Catch-all for unexpected errors
+            return None
 
     def insert_record(self, record_object):
         pk = int(datetime.now().timestamp())
-        query_str = self._generate_insert_query(pk, 
-                                            record_object.temperature,
-                                            record_object.marked_time,
-                                            record_object.running_mode,
-                                            record_object.is_burning
-                                            )
-        self.log.debug("Generated SQL:", query_str.string)
+        stmt = insert(self.records).values(SystemTimestamp=pk,
+                                        Temperature=record_object.temperature,
+                                        MarkedTime=record_object.marked_time.strftime("%Y-%m-%dT%H:%MZ"),
+                                        RunningMode=record_object.running_mode,
+                                        IsBurning=record_object.is_burning)
+        stmt.compile(self.engine, compile_kwargs={"literal_binds": True})
 
         try:
             
-            result = self.connection.execute(query_str)
+            result = self.connection.execute(stmt)
             self.connection.commit()
                 
             if result.inserted_primary_key[0] is None:
