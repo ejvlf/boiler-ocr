@@ -12,7 +12,7 @@ from objects.boiler import BoilerData
 from persistence.database import MariaDBHandler
 
 CAMERA_CONNECTION_ATTEMPTS_LIMIT = 3
-TEMPERATURE_THRESHOLD = 10
+
 """
 
 Aplicação gloriosa que lê o leitor das caldeiras Ferlux e 
@@ -62,9 +62,6 @@ def cleanup(capture=None):
         capture.release()
     cv2.destroyAllWindows()
 
-
-
-
 def main():
     signal.signal(signal.SIGTERM, handle_sigterm)
 
@@ -108,20 +105,22 @@ def main():
     
     main_logger.debug(f"Trying to connect to {source}")
 
-    records = db_handler.get_report_records_after()
-    main_logger.info(f"Records fetched: {len(records)}")
+    #records = db_handler.get_report_records_after()
+    #main_logger.info(f"Records fetched: {len(records)}")
 
-    report_records = ReportProcessor(main_logger, db_handler)
-    records_to_persist = report_records.process_report_data(records)
+    #report_records = ReportProcessor(main_logger, db_handler)
+    #records_to_persist = report_records.process_report_data(records)
 
-    for record in records_to_persist:
-        main_logger.info(f"Persisting report record with start time {record.start_time} and end time {record.end_time}")
-        db_handler.insert_report_record(record)
+    #for record in records_to_persist:
+    #    main_logger.info(f"Persisting report record with start time {record.start_time} and end time {record.end_time}")
+    #    db_handler.insert_report_record(record)
 
     try:
         
-        is_off = False
+        stop_recording = False
+        previous_record = None
         # O smartphone fazia timeout se o objeto estivesse sempre instanciado
+
         while feed_live:
             capture = connect(source)
             main_logger.debug("Reading frame")
@@ -153,23 +152,30 @@ def main():
 
                 # Instanciar. Validações estão dentro do objeto                
                 result = BoilerData(detected_text, main_logger, args.dry_run, db_handler)
-                
-                if result.temperature > TEMPERATURE_THRESHOLD and is_off == False:
-                    result.persist_run()
 
-                if result.is_burning == False and is_off == False:
-                    main_logger.info("Boiler is off. Not persisting until turned on.")
-                    is_off = True
-                    
-                elif result.is_burning == True and is_off == True:
+                if previous_record is not None and (result.is_burning == previous_record.is_burning and 
+                    result.temperature == previous_record.temperature and  
+                    result.running_mode == previous_record.running_mode):
+                    main_logger.debug("No significant change detected. Not persisting.")
+                    continue 
+
+                if result.is_burning == True and stop_recording == True:
                     main_logger.info("Boiler is on again. Resuming persistence.")
-                    is_off = False
+                    stop_recording = False
+
+                if result.is_valid == True and stop_recording == False:
+                    result.persist_run()
+                    previous_record = result
+
+                if result.is_burning == False and stop_recording == False:
+                    main_logger.info("Boiler is off. Not persisting until turned on.")
+                    stop_recording = True                    
 
 
             except Exception as e:
                 main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
             
-            #cleanup(capture)
+            cleanup(capture)
             main_logger.debug("Resources released. Waiting")
             time.sleep(wait_time)
 

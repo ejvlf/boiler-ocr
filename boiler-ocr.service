@@ -3,12 +3,12 @@ Description=Ferlux Boiler OCR Service
 After=network.target mariadb.service
 
 [Service]
-User=svc-bastoserver
-Group=svc-bastoserver
+User={user}
+Group={group}
 
 WorkingDirectory=
 
-ExecStart=/home/usr/path/to/project/venv/bin/python main.py --settings my_settings --file_log
+ExecStart={path}python main.py --settings my_settings --file_log
 
 # Restart configuration
 Restart=always

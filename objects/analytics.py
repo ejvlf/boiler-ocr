@@ -93,6 +93,7 @@ class ReportData:
     def total_duration(self):
         return self.parse_timedelta_to_time(self._total_duration)
 
+
     @total_duration.setter
     def total_duration(self, unix_timestamp: int):
         self._total_duration += timedelta(seconds=unix_timestamp)

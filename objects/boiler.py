@@ -1,14 +1,30 @@
 from datetime import datetime
+VALID_RUNNING_MODES = ["A", "1", "2", "3", "4", "5"]
+MAX_TEMPERATURE = 80
+MIN_TEMPERATURE = 25
+MIN_WORKING_TEMPERATURE = 53
 
 class BoilerData:
     def __init__(self, raw_data, logger, is_dry_run, db_handler):
         self.log = logger
+        self.is_valid = True
         self.is_burning = self._form_is_burning(raw_data)
         self.temperature = self._form_temperature(raw_data)
         self.marked_time = self._form_marked_time(raw_data)
         self.running_mode = self._form_running_mode(raw_data)
         self.dry_run = is_dry_run
         self.db_handler = db_handler
+
+        # Se os dados forem válidos avaliar o objeto como um todo. às vezes as combinações não fazem sentido
+        if self.is_valid == True:
+            self.validate()
+
+    def validate(self):
+        if self.is_burning == False and self.temperature > MIN_WORKING_TEMPERATURE:
+            self.is_valid = False
+            self.log.warning(f"Boiler is not burning but temperature is {self.temperature}. Invalid run.")
+            return
+         
     def _form_is_burning(self, raw_data):
         is_burning = False
         bottom_row = raw_data.splitlines()[1].strip()            
@@ -39,13 +55,18 @@ class BoilerData:
         return time_as_datetime
     def _form_running_mode (self, raw_data) -> str:
         running_mode = "0"
-        if self.is_burning:
+        if self.is_burning == True:
             mode_from_string = raw_data.splitlines()[1]
             running_mode = mode_from_string[0:1].strip()
 
             # Tesseract thinks A is 8
             if running_mode == "8":
                 running_mode = "A"
+
+            if running_mode not in VALID_RUNNING_MODES:
+                self.log.warning(f"Couldn't get proper running mode from ocr {raw_data}. Invalid run")
+                self.is_valid = False
+        
         return running_mode
     def _form_temperature(self, raw_data):
         try:
@@ -55,6 +76,11 @@ class BoilerData:
                 temperature_to_return = int(temperature_as_string[1].replace(" ","")[-2:].strip())
             else:                
                 temperature_to_return = int(temperature_as_string[1].strip())
+
+            if temperature_to_return > MAX_TEMPERATURE or temperature_to_return < MIN_TEMPERATURE:
+                self.log.warning(f"Temperature {temperature_to_return} is out of bounds. Invalid run")
+                self.is_valid = False
+
         except ValueError as e:
             self.log.error(f"Couldn't get proper temperature from ocr {raw_data}. Setting to 0.")
         return temperature_to_return
