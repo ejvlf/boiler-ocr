@@ -23,15 +23,34 @@ depois inserir esses dados numa base de dados. Bastante inutil mas um exercicio 
 
 """
 
-def form_logger(is_debug : bool, is_file_log : bool, mod_name : str) -> logging.Logger:
-    logging_level = logging.DEBUG if is_debug == True else logging.INFO
-    if is_file_log == True:
-        fname = f"{datetime.now().date().strftime('%Y-%m-%d')}_boiler_ocr_{mod_name}.log"
-        logging.basicConfig(filename=fname, level=logging_level, format=f'%(asctime)s %(levelname)s: %(message)s')
-    else:
-        logging.basicConfig(level=logging_level, format=f'%(asctime)s %(levelname)s: %(message)s')     
+def form_logger(is_debug: bool, is_file_log: bool, mod_name: str) -> logging.Logger:
 
-    return logging.getLogger(f"Boiler OCR - {mod_name}")        
+    logging_level = logging.DEBUG if is_debug else logging.INFO
+    
+    # Create logger
+    logger = logging.getLogger(f"Boiler OCR - {mod_name}")
+    logger.setLevel(logging_level)
+    
+    # Remove existing handlers to avoid duplicates
+    logger.handlers.clear()
+    
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+    
+    # Create appropriate handler
+    if is_file_log:
+        fname = f"{datetime.now().date().strftime('%Y-%m-%d')}_boiler_ocr_{mod_name}.log"
+        handler = logging.FileHandler(fname)
+    else:
+        handler = logging.StreamHandler()
+    
+    handler.setLevel(logging_level)
+    handler.setFormatter(formatter)
+    
+    # Add handler to logger
+    logger.addHandler(handler)
+    
+    return logger
 
 def form_database_connection(user : str, pwd : str, host : str, db : str):
     database_url = f"mariadb+mariadbconnector://{user}:{pwd}@{host}/{db}"
