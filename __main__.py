@@ -22,6 +22,17 @@ Usa CV2 e Tesseract OCR para operar a magia sobre a imagem e
 depois inserir esses dados numa base de dados. Bastante inutil mas um exercicio divertido. 
 
 """
+
+def form_logger(is_debug : bool, is_file_log : bool, mod_name : str) -> logging.Logger:
+    logging_level = logging.DEBUG if is_debug == True else logging.INFO
+    if is_file_log == True:
+        fname = f"{datetime.now().date().strftime('%Y-%m-%d')}_boiler_ocr_{mod_name}.log"
+        logging.basicConfig(filename=fname, level=logging_level, format=f'%(asctime)s %(levelname)s: %(message)s')
+    else:
+        logging.basicConfig(level=logging_level, format=f'%(asctime)s %(levelname)s: %(message)s')     
+
+    return logging.getLogger(f"Boiler OCR - {mod_name}")        
+
 def form_database_connection(user : str, pwd : str, host : str, db : str):
     database_url = f"mariadb+mariadbconnector://{user}:{pwd}@{host}/{db}"
     return database_url
@@ -62,30 +73,45 @@ def cleanup(capture=None):
         capture.release()
     cv2.destroyAllWindows()
 
-def main():
-    signal.signal(signal.SIGTERM, handle_sigterm)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", help="add more logging information to application", action="store_true")
-    parser.add_argument("--file_log", help="Log actions to a file", action="store_true")
-    parser.add_argument("--dry_run", help="Only log results", action="store_true")
-    parser.add_argument("--settings", help="Name of the file with the settings. Needs to be json.")
-
-    args = parser.parse_args()
+def report_command(args):
 
     # logger
-    logging_level = logging.DEBUG if args.debug == True else logging.INFO
-    main_logger = logging.getLogger("Boiler OCR")    
+    main_logger = form_logger(args.debug, args.file_log, "report")
+    
+    # definições
+    app_settings = get_settings(f"{args.settings}.json")
+
+    database_url = form_database_connection(app_settings["app"]["database"]["user"],
+                                            app_settings["app"]["database"]["password"],
+                                            app_settings["app"]["database"]["host"],
+                                            app_settings["app"]["database"]["database"]
+                                            )
+
+    # base de dados
+    db_handler = MariaDBHandler(database_url, main_logger)
+
+    records = db_handler.get_report_records_after()
+    main_logger.info(f"Records fetched: {len(records)}")
+
+    report_records = ReportProcessor(main_logger)
+    records_to_persist = report_records.process_report_data(records)
+
+    for record in records_to_persist:
+        main_logger.info(f"Persisting report record with start time {record.start_time} and end time {record.end_time}")
+        db_handler.insert_report_record(record)
+
+    main_logger.info("Finished processing report data")
+
+def run_command(args):
+    signal.signal(signal.SIGTERM, handle_sigterm)
+
+    # logger
+    main_logger = form_logger(args.debug, args.file_log, "main")    
 
     # definições
     app_settings = get_settings(f"{args.settings}.json")
     pytesseract.pytesseract.tesseract_cmd = app_settings["ocr"]["tesseract-dir"]
     
-    if args.file_log == True:
-        fname = f"{datetime.now().date().strftime('%Y-%m-%d')}_boiler_ocr.log"
-        logging.basicConfig(filename=fname, level=logging_level, format=f'%(asctime)s %(levelname)s: %(message)s')
-    else:
-        logging.basicConfig(level=logging_level, format=f'%(asctime)s %(levelname)s: %(message)s') 
     # Base de dados e video
     source = form_source_endpoint(app_settings["camera"]["connection"]["ip"], app_settings["camera"]["connection"]["port"])
     database_url = form_database_connection(app_settings["app"]["database"]["user"],
@@ -104,16 +130,6 @@ def main():
         db_handler = MariaDBHandler(database_url, main_logger)
     
     main_logger.debug(f"Trying to connect to {source}")
-
-    #records = db_handler.get_report_records_after()
-    #main_logger.info(f"Records fetched: {len(records)}")
-
-    #report_records = ReportProcessor(main_logger, db_handler)
-    #records_to_persist = report_records.process_report_data(records)
-
-    #for record in records_to_persist:
-    #    main_logger.info(f"Persisting report record with start time {record.start_time} and end time {record.end_time}")
-    #    db_handler.insert_report_record(record)
 
     try:
         
@@ -183,5 +199,40 @@ def main():
         cleanup(capture)
         main_logger.info("Finished capture")
         return
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Ferlux Boiler OCR System",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s run --settings config --debug
+  %(prog)s report --settings config --file-log
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
+
+    # Run subcommand
+    run_parser = subparsers.add_parser('run', help='Start boiler data collection from camera')
+    run_parser.add_argument("--debug", help="Enable debug logging", action="store_true")
+    run_parser.add_argument("--file-log", help="Log to file instead of console", action="store_true")
+    run_parser.add_argument("--dry-run", help="Run without persisting to database", action="store_true")
+    run_parser.add_argument("--settings", help="Settings file name (without .json)", required=True)
+
+    # Report subcommand
+    report_parser = subparsers.add_parser('report', help='Generate analytics report from collected data')
+    report_parser.add_argument("--debug", help="Enable debug logging", action="store_true")
+    report_parser.add_argument("--file-log", help="Log to file instead of console", action="store_true")
+    report_parser.add_argument("--dry-run", help="Run without persisting to database", action="store_true")
+    report_parser.add_argument("--settings", help="Settings file name (without .json)", required=True)
+
+    args = parser.parse_args()
+
+    if args.command == 'run':
+        run_command(args)
+    elif args.command == 'report':
+        report_command(args)
+
 if __name__ == "__main__":
     main()

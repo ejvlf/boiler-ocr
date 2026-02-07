@@ -7,9 +7,8 @@ import time
 from datetime import time, datetime, timedelta
 
 class ReportData:
-    def __init__(self, logger : logging.Logger, db_handler):
+    def __init__(self, logger : logging.Logger):
         self.log = logger
-        self.db_handler = db_handler
         self._start_time = None
         self._end_time = None
         self._avg_temperature = []
@@ -91,17 +90,12 @@ class ReportData:
 
     @property
     def total_duration(self):
-        return self.parse_timedelta_to_time(self._total_duration)
-
-
-    @total_duration.setter
-    def total_duration(self, unix_timestamp: int):
-        self._total_duration += timedelta(seconds=unix_timestamp)
+        time_diff = self._end_time - self._start_time
+        return self.parse_timedelta_to_time(time_diff)
 
 class ReportProcessor:
-    def __init__(self, logger : logging.Logger, db_handler):
+    def __init__(self, logger : logging.Logger):
         self.log = logger
-        self.db_handler = db_handler
     
     def process_report_data(self, raw_data : list[tuple]) -> list[ReportData]:
         report_data_list = []
@@ -109,7 +103,7 @@ class ReportProcessor:
 
         for row in raw_data:
             if row[4] == True and current_report is None:
-                current_report = ReportData(self.log, self.db_handler)
+                current_report = ReportData(self.log)
                 current_report.start_time = row[0]
             
             if row[4] == True and current_report is not None:
