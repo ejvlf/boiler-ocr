@@ -92,6 +92,60 @@ def cleanup(capture=None):
         capture.release()
     cv2.destroyAllWindows()
 
+def reference_command(args):
+    # logger
+    main_logger = form_logger(args.debug, False, "reference")
+    
+    # definições
+    app_settings = get_settings(f"{args.settings}.json")
+
+    database_url = form_database_connection(app_settings["app"]["database"]["user"],
+                                            app_settings["app"]["database"]["password"],
+                                            app_settings["app"]["database"]["host"],
+                                            app_settings["app"]["database"]["database"]
+                                            )
+
+    # base de dados
+    db_handler = MariaDBHandler(database_url, main_logger)
+
+    # Os dados que existem sem informação de consumo adicional
+    report_ids_to_proc = db_handler.get_partial_reports()
+
+    if report_ids_to_proc is None or len(report_ids_to_proc) == 0:
+        main_logger.info("No reports found that require reference data. Exiting.")
+        return
+
+    for report_id in report_ids_to_proc:
+        try:
+            print(f"Para o relatório ID {report_id[0]} que vai de {report_id[1]} a {report_id[2]}")
+            reference_consumption = input("Sacos de pellets consumidos: ")
+            reference_temperature = int(input("Temperatura de referência para o consumo: "))
+            reference_sensor = float(input("Temperatura de referência para o sensor: "))
+
+            data = {
+                "id": int(datetime.now().timestamp()),
+                "report_id": report_id[0],
+                "quantity": reference_consumption,
+                "max_boiler_temperature": reference_temperature,
+                "max_room_temperature": reference_sensor
+                }
+            
+            db_handler.insert_consumption_record(data)
+
+            print("Para proseguir carrega no ENTER. Para sair, carrega CTRL+C")
+            input()
+
+        except ValueError:
+            main_logger.warning("Valor inválido")
+
+        except Exception as e:
+            main_logger.error(f"Falhou a persistir: {e}")
+            break
+        except KeyboardInterrupt:
+            main_logger.info("Fim do programa")
+            break
+    main_logger.info("Todos os relatórios processados")
+
 def report_command(args):
 
     # logger
@@ -246,12 +300,20 @@ Examples:
     report_parser.add_argument("--dry-run", help="Run without persisting to database", action="store_true")
     report_parser.add_argument("--settings", help="Settings file name (without .json)", required=True)
 
+
+    # Reference subcommand
+    reference_parser = subparsers.add_parser('reference', help='Input reference data for the reports')
+    reference_parser.add_argument("--debug", help="Enable debug logging", action="store_true")
+    reference_parser.add_argument("--dry-run", help="Run without persisting to database", action="store_true")
+    reference_parser.add_argument("--settings", help="Settings file name (without .json)", required=True)
+
     args = parser.parse_args()
 
     if args.command == 'run':
         run_command(args)
     elif args.command == 'report':
         report_command(args)
-
+    elif args.command == 'reference':
+        reference_command(args)
 if __name__ == "__main__":
     main()

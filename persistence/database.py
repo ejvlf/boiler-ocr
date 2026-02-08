@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, Numeric, Time, create_engine, MetaData, Table, Column, Integer, SmallInteger , String, Boolean, func, insert, select, text
+from sqlalchemy import DateTime, Numeric, Time, create_engine, MetaData, Table, Column, Integer, SmallInteger , String, Boolean, func, insert, select, null
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import logging
@@ -38,15 +38,21 @@ class MariaDBHandler:
             Column("TotalDuration", Time, nullable=False),
             Column("HasStandby", Boolean, nullable=False)
         )
+        self.consumption = Table(
+            "consumption", self.metadata,
+            Column("ID", Integer, primary_key=True),
+            Column("ReportID", Integer, nullable=False),
+            Column("Quantity", Numeric(2,1), nullable=False),
+            Column("MaxRoomTemperature", Numeric(3,1), nullable=False),
+            Column("MaxBoilerTemperature", Numeric(3,1), nullable=False)
+        )        
     def get_reporting_last_end_time(self) -> datetime:
         try:
-            # Query for the maximum EndTime
             stmt = select(func.max(self.report.c.EndTime))
 
             result = self.connection.execute(stmt)
             latest_end_time = result.scalar()
             
-            # If no records exist, return default date
             if latest_end_time is None:
                 self.log.info("No records found in report table, returning default date")
                 return datetime(2026, 2, 3, 0, 0, 0)
@@ -55,7 +61,45 @@ class MariaDBHandler:
             
         except SQLAlchemyError as e:
             self.log.error(f"Error fetching latest EndTime: {e}")
-            return datetime(2026, 2, 3)  # Return default on error
+            return datetime(2026, 2, 3)
+    def get_partial_reports(self) -> list[tuple]:
+        try:
+            stmt = (
+                select(self.report.c.ID, self.report.c.StartTime, self.report.c.EndTime)
+                .outerjoin(self.consumption, self.report.c.ID == self.consumption.c.ReportID)
+                .where(self.consumption.c.ReportID.is_(None))
+            )
+            result = self.connection.execute(stmt)
+            all_results = result.fetchall()
+            return all_results
+        except SQLAlchemyError as e:
+            self.log.error(f"Error fetching latest missing results: {e}")
+            return None
+    def insert_consumption_record(self, data : dict):
+        stmt = insert(self.consumption).values(
+                                        ID=data["id"],            
+                                        ReportID=data["report_id"],
+                                        Quantity=data["quantity"],
+                                        MaxRoomTemperature=data["max_room_temperature"],
+                                        MaxBoilerTemperature=data["max_boiler_temperature"]
+                                        )
+        stmt.compile(self.engine, compile_kwargs={"literal_binds": True})
+        try:
+            
+            result = self.connection.execute(stmt)
+            self.connection.commit()
+            self.log.info(f"Inserted consumption record with ID {result.inserted_primary_key[0]}")
+                
+            return result.inserted_primary_key[0]
+        except IntegrityError as e:
+            self.log.error(f"Integrity Error: {e.orig}")  # NULL
+            return None
+        except SQLAlchemyError as e:
+            self.log.critical(f"Command Error: {e}") 
+            return None
+        except Exception as e:
+            self.log.critical(f"Unexpected Error: {e}")
+            return None
     def get_report_records_after(self):
         try:
             timestamp = self.get_reporting_last_end_time()
@@ -94,13 +138,13 @@ class MariaDBHandler:
                 
             return result.inserted_primary_key[0]
         except IntegrityError as e:
-            self.log.error(f"Integrity Error: {e.orig}")  # Likely a NULL violation
+            self.log.error(f"Integrity Error: {e.orig}")  # NULL
             return None
         except SQLAlchemyError as e:
-            self.log.critical(f"Command Error: {e}")  # General SQLAlchemy error
+            self.log.critical(f"Command Error: {e}") 
             return None
         except Exception as e:
-            self.log.critical(f"Unexpected Error: {e}")  # Catch-all for unexpected errors
+            self.log.critical(f"Unexpected Error: {e}")
             return None
 
     def insert_record(self, record_object):
@@ -122,13 +166,13 @@ class MariaDBHandler:
                 
             return result.inserted_primary_key[0]
         except IntegrityError as e:
-            self.log.error(f"Integrity Error: {e.orig}")  # Likely a NULL violation
+            self.log.error(f"Integrity Error: {e.orig}")  #NULL
             return None
         except SQLAlchemyError as e:
-            self.log.critical(f"Command Error: {e}")  # General SQLAlchemy error
+            self.log.critical(f"Command Error: {e}")  
             return None
         except Exception as e:
-            self.log.critical(f"Unexpected Error: {e}")  # Catch-all for unexpected errors
+            self.log.critical(f"Unexpected Error: {e}")
             return None
     def __del__(self):
         self.connection.close()
