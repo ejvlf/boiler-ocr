@@ -31,13 +31,9 @@ def form_logger(is_debug: bool, is_file_log: bool, mod_name: str) -> logging.Log
     logger = logging.getLogger(f"Boiler OCR - {mod_name}")
     logger.setLevel(logging_level)
     
-    # Remove existing handlers to avoid duplicates
-    logger.handlers.clear()
-    
-    # Create formatter
+    logger.handlers.clear()    
     formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
     
-    # Create appropriate handler
     if is_file_log:
         fname = f"{datetime.now().date().strftime('%Y-%m-%d')}_boiler_ocr_{mod_name}.log"
         handler = logging.FileHandler(fname)
@@ -47,7 +43,6 @@ def form_logger(is_debug: bool, is_file_log: bool, mod_name: str) -> logging.Log
     handler.setLevel(logging_level)
     handler.setFormatter(formatter)
     
-    # Add handler to logger
     logger.addHandler(handler)
     
     return logger
@@ -263,8 +258,7 @@ def run_command(args):
 
             except Exception as e:
                 main_logger.warning(f"Failed while forming the log. Retrying in the next cycle {e}. OCR is {detected_text}")
-            
-            cleanup(capture)
+
             main_logger.debug("Resources released. Waiting")
             time.sleep(wait_time)
 

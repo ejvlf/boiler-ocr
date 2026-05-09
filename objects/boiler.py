@@ -2,7 +2,7 @@ from datetime import datetime
 VALID_RUNNING_MODES = ["A", "1", "2", "3", "4", "5"]
 MAX_TEMPERATURE = 80
 MIN_TEMPERATURE = 25
-MIN_WORKING_TEMPERATURE = 53
+MIN_WORKING_TEMPERATURE = 52
 
 class BoilerData:
     def __init__(self, raw_data, logger, is_dry_run, db_handler):
@@ -20,7 +20,7 @@ class BoilerData:
             self.validate()
 
     def validate(self):
-        if self.is_burning == False and self.temperature > MIN_WORKING_TEMPERATURE:
+        if self.is_burning == False and self.temperature >= MIN_WORKING_TEMPERATURE:
             self.is_valid = False
             self.log.warning(f"Boiler is not burning but temperature is {self.temperature}. Invalid run.")
             return
