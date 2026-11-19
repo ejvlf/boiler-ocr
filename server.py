@@ -68,7 +68,26 @@ def receive_image():
             return jsonify({"error": "invalid image"}), 400
 
         detected_text = extract_text(frame, is_debug)
-        # ... rest of your logic unchanged
+
+        # Instanciar. Validações estão dentro do objeto                
+        result = BoilerData(detected_text, app_logger, False, db_handler)
+
+        if previous_record is not None and (result.is_burning == previous_record.is_burning and 
+            result.temperature == previous_record.temperature and  
+            result.running_mode == previous_record.running_mode):
+            app_logger.debug("No significant change detected. Not persisting.")
+
+        if result.is_burning == True and stop_recording == True:
+            app_logger.info("Boiler is on again. Resuming persistence.")
+            
+        if result.is_valid == True and stop_recording == False:
+            result.persist_run()
+            previous_record = result
+        
+        if result.is_burning == False and stop_recording == False:
+            app_logger.info("Boiler is off. Not persisting until turned on.")
+
+
     except Exception as e:
         app_logger.warning(f"Failed while forming the log: {e}. OCR is {detected_text}")
         return jsonify({"status": f"failed {e}"}), 500
