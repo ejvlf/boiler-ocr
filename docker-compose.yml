@@ -1,0 +1,22 @@
+services:
+  boiler-ocr:
+    build: .
+    container_name: boiler-ocr
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./settings.json:/app/settings.json:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  print-ip:
+    image: alpine
+    network_mode: host
+    command: >
+      sh -c "
+        echo '==========================================';
+        echo 'Boiler OCR API is reachable at:';
+        ip route get 1 | awk '{print \"  http://\" $$7 \":8000/reading\"}' | head -1;
+        echo '==========================================';
+      "
