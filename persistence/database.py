@@ -93,12 +93,15 @@ class MariaDBHandler:
             return result.inserted_primary_key[0]
         except IntegrityError as e:
             self.log.error(f"Integrity Error: {e.orig}")  # NULL
+            self.connection.rollback()
             return None
         except SQLAlchemyError as e:
             self.log.critical(f"Command Error: {e}") 
+            self.connection.rollback()
             return None
         except Exception as e:
             self.log.critical(f"Unexpected Error: {e}")
+            self.connection.rollback()            
             return None
     def get_report_records_after(self):
         try:
@@ -139,12 +142,15 @@ class MariaDBHandler:
             return result.inserted_primary_key[0]
         except IntegrityError as e:
             self.log.error(f"Integrity Error: {e.orig}")  # NULL
+            self.connection.rollback()            
             return None
         except SQLAlchemyError as e:
             self.log.critical(f"Command Error: {e}") 
+            self.connection.rollback()
             return None
         except Exception as e:
             self.log.critical(f"Unexpected Error: {e}")
+            self.connection.rollback()
             return None
 
     def insert_record(self, record_object):
@@ -167,12 +173,15 @@ class MariaDBHandler:
             return result.inserted_primary_key[0]
         except IntegrityError as e:
             self.log.error(f"Integrity Error: {e.orig}")  #NULL
+            self.connection.rollback()
             return None
         except SQLAlchemyError as e:
             self.log.critical(f"Command Error: {e}")  
+            self.connection.rollback()
             return None
         except Exception as e:
             self.log.critical(f"Unexpected Error: {e}")
+            self.connection.rollback()
             return None
     def __del__(self):
         self.connection.close()

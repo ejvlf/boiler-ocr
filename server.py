@@ -79,13 +79,15 @@ def receive_image():
 
         if result.is_burning == True and stop_recording == True:
             app_logger.info("Boiler is on again. Resuming persistence.")
+            stop_recording = False
             
-        if result.is_valid == True and stop_recording == False:
+        if result.is_valid == True and stop_recording == False and result.is_burning == True:
             result.persist_run()
             previous_record = result
         
         if result.is_burning == False and stop_recording == False:
             app_logger.info("Boiler is off. Not persisting until turned on.")
+            stop_recording = True
 
 
     except Exception as e:

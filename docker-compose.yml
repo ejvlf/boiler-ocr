@@ -9,7 +9,9 @@ services:
       - ./settings.json:/app/settings.json:ro
     environment:
       - PYTHONUNBUFFERED=1
-
+    limits:
+      cpus: "1"
+      memory: "256M"
   print-ip:
     image: alpine
     network_mode: host

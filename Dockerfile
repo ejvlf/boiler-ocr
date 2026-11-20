@@ -12,8 +12,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Your custom 'lets' language data (see note below)
-COPY lets /usr/share/tesseract-ocr/5/tessdata/lets.traineddata
+COPY lets/lets.traineddata /usr/share/tesseract-ocr/5/tessdata/lets.traineddata
+COPY lets/lets.pffmtable /usr/share/tesseract-ocr/5/tessdata/lets.pffmtable
+COPY lets/lets.shapetable /usr/share/tesseract-ocr/5/tessdata/lets.shapetable
+COPY lets/lets.unicharset /usr/share/tesseract-ocr/5/tessdata/lets.unicharset
 
 COPY . .
 
